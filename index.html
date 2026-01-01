@@ -336,12 +336,14 @@
 
         console.log = function(...args) {
             originalLog.apply(console, args);
-            addLog(args.join(' '), 'info');
+            const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' ');
+            addLog(message, 'info');
         };
 
         console.error = function(...args) {
             originalError.apply(console, args);
-            addLog(args.join(' '), 'error');
+            const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' ');
+            addLog(message, 'error');
         };
 
         // Initialize Telegram WebApp

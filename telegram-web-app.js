@@ -1345,6 +1345,7 @@
   var SecondaryButton = BottomButtonConstructor('secondary');
 
   var AudioPlayer = (function() {
+
     var audioElement = null;
     var currentUrl = '';
     var isInitialized = false;
