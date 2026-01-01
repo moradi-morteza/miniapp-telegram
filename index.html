@@ -101,6 +101,118 @@
             margin-top: 10px;
             background-color: var(--tg-theme-destructive-text-color, #e74c3c);
         }
+
+        .music-player {
+            background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .player-info {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .track-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--tg-theme-text-color, #000000);
+        }
+
+        .player-status {
+            font-size: 12px;
+            color: var(--tg-theme-hint-color, #666666);
+        }
+
+        #playerStatus {
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .player-controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .player-controls button {
+            flex: 1;
+            max-width: 100px;
+        }
+
+        .player-timeline {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .player-timeline span {
+            font-size: 12px;
+            font-family: monospace;
+            min-width: 40px;
+            color: var(--tg-theme-text-color, #000000);
+        }
+
+        .seek-bar,
+        .volume-bar {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--tg-theme-hint-color, #dddddd);
+            outline: none;
+        }
+
+        .seek-bar::-webkit-slider-thumb,
+        .volume-bar::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--tg-theme-button-color, #3390ec);
+            cursor: pointer;
+        }
+
+        .seek-bar::-moz-range-thumb,
+        .volume-bar::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--tg-theme-button-color, #3390ec);
+            cursor: pointer;
+            border: none;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .volume-control span {
+            font-size: 12px;
+            min-width: 45px;
+            color: var(--tg-theme-text-color, #000000);
+        }
+
+        .player-debug {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .player-debug button {
+            flex: 1;
+            font-size: 12px;
+            padding: 8px 12px;
+        }
     </style>
 </head>
 <body>
@@ -143,6 +255,57 @@
                 <button onclick="showMainButton()">Show Main Button</button>
                 <button onclick="hideMainButton()">Hide Main Button</button>
                 <button onclick="setMainButtonText()">Change Text</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Music Player</h2>
+            <div id="musicPlayerContainer" class="music-player">
+                <audio id="audioElement" preload="metadata"></audio>
+
+                <div class="player-info">
+                    <div class="track-title">Ready to play</div>
+                    <div class="player-status">Status: <span id="playerStatus">stopped</span></div>
+                </div>
+
+                <div class="player-controls">
+                    <button id="playBtn" onclick="playAudio()">Play</button>
+                    <button id="pauseBtn" onclick="pauseAudio()">Pause</button>
+                    <button id="stopBtn" onclick="stopAudio()">Stop</button>
+                </div>
+
+                <div class="player-timeline">
+                    <span id="currentTime">0:00</span>
+                    <input
+                        type="range"
+                        id="seekBar"
+                        min="0"
+                        max="100"
+                        value="0"
+                        class="seek-bar"
+                        oninput="seekAudio(this.value)"
+                    />
+                    <span id="duration">0:00</span>
+                </div>
+
+                <div class="volume-control">
+                    <span>Volume:</span>
+                    <input
+                        type="range"
+                        id="volumeBar"
+                        min="0"
+                        max="100"
+                        value="100"
+                        class="volume-bar"
+                        oninput="changeVolume(this.value)"
+                    />
+                    <span id="volumeValue">100%</span>
+                </div>
+
+                <div class="player-debug">
+                    <button onclick="loadTestTrack()">Load Test Track</button>
+                    <button onclick="getPlayerState()">Get State</button>
+                </div>
             </div>
         </div>
 
@@ -295,6 +458,147 @@
         function clearLogs() {
             document.getElementById('logSection').innerHTML = '';
             originalLog('Logs cleared');
+        }
+
+        // Music Player Functions
+        let isPlayerInitialized = false;
+        let isSeeking = false;
+
+        function initMusicPlayer() {
+            if (isPlayerInitialized) return;
+
+            const audioElement = document.getElementById('audioElement');
+
+            try {
+                tg.AudioPlayer.init(audioElement);
+                isPlayerInitialized = true;
+
+                addLog('Music player initialized', 'success');
+
+                audioElement.addEventListener('play', updatePlayerUI);
+                audioElement.addEventListener('pause', updatePlayerUI);
+                audioElement.addEventListener('ended', updatePlayerUI);
+                audioElement.addEventListener('loadedmetadata', function() {
+                    document.getElementById('duration').textContent = formatTime(audioElement.duration);
+                    document.getElementById('seekBar').max = audioElement.duration;
+                });
+                audioElement.addEventListener('timeupdate', function() {
+                    if (!isSeeking) {
+                        document.getElementById('currentTime').textContent = formatTime(audioElement.currentTime);
+                        document.getElementById('seekBar').value = audioElement.currentTime;
+                    }
+                });
+
+            } catch (error) {
+                addLog('Failed to initialize music player: ' + error.message, 'error');
+            }
+        }
+
+        function updatePlayerUI() {
+            const state = tg.AudioPlayer.state;
+            document.getElementById('playerStatus').textContent = state;
+
+            const playBtn = document.getElementById('playBtn');
+            const pauseBtn = document.getElementById('pauseBtn');
+
+            if (state === 'playing') {
+                playBtn.disabled = true;
+                pauseBtn.disabled = false;
+            } else if (state === 'paused' || state === 'stopped') {
+                playBtn.disabled = false;
+                pauseBtn.disabled = true;
+            }
+        }
+
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return mins + ':' + (secs < 10 ? '0' : '') + secs;
+        }
+
+        function loadTestTrack() {
+            initMusicPlayer();
+
+            const url = 'https://dls.musics-fa.com/song/alibz/2025/12/Iman%20Tahmasebi%20-%20Golomi%20Musics-Fa.mp3';
+
+            try {
+                tg.AudioPlayer.load(url);
+                document.querySelector('.track-title').textContent = 'Iman Tahmasebi - Golomi';
+                addLog('Track loaded: ' + url, 'success');
+            } catch (error) {
+                addLog('Failed to load track: ' + error.message, 'error');
+            }
+        }
+
+        function playAudio() {
+            initMusicPlayer();
+
+            try {
+                tg.AudioPlayer.play();
+                addLog('Playing audio', 'success');
+            } catch (error) {
+                addLog('Play failed: ' + error.message, 'error');
+            }
+        }
+
+        function pauseAudio() {
+            if (!isPlayerInitialized) return;
+
+            try {
+                tg.AudioPlayer.pause();
+                addLog('Audio paused', 'success');
+            } catch (error) {
+                addLog('Pause failed: ' + error.message, 'error');
+            }
+        }
+
+        function stopAudio() {
+            if (!isPlayerInitialized) return;
+
+            try {
+                tg.AudioPlayer.stop();
+                addLog('Audio stopped', 'success');
+            } catch (error) {
+                addLog('Stop failed: ' + error.message, 'error');
+            }
+        }
+
+        function seekAudio(value) {
+            if (!isPlayerInitialized) return;
+
+            isSeeking = true;
+            try {
+                tg.AudioPlayer.seek(parseFloat(value));
+                document.getElementById('currentTime').textContent = formatTime(value);
+            } catch (error) {
+                addLog('Seek failed: ' + error.message, 'error');
+            }
+
+            setTimeout(() => { isSeeking = false; }, 100);
+        }
+
+        function changeVolume(value) {
+            if (!isPlayerInitialized) return;
+
+            const volume = parseInt(value) / 100;
+            try {
+                tg.AudioPlayer.setVolume(volume);
+                document.getElementById('volumeValue').textContent = value + '%';
+                addLog('Volume: ' + value + '%', 'info');
+            } catch (error) {
+                addLog('Volume change failed: ' + error.message, 'error');
+            }
+        }
+
+        function getPlayerState() {
+            if (!isPlayerInitialized) {
+                addLog('Player not initialized', 'error');
+                return;
+            }
+
+            const state = tg.AudioPlayer.getState();
+            addLog('Player state: ' + JSON.stringify(state, null, 2), 'info');
         }
 
         // Initialize

@@ -1344,6 +1344,294 @@
   var MainButton = BottomButtonConstructor('main');
   var SecondaryButton = BottomButtonConstructor('secondary');
 
+  var AudioPlayer = (function() {
+    var audioElement = null;
+    var currentUrl = '';
+    var isInitialized = false;
+    var playerState = 'stopped';
+    var currentTime = 0.0;
+    var duration = 0.0;
+    var volume = 1.0;
+    var lastError = null;
+    var lastSentState = null;
+
+    var audioPlayer = {};
+
+    Object.defineProperty(audioPlayer, 'state', {
+      get: function() { return playerState; },
+      enumerable: true
+    });
+
+    Object.defineProperty(audioPlayer, 'currentTime', {
+      get: function() { return currentTime; },
+      enumerable: true
+    });
+
+    Object.defineProperty(audioPlayer, 'duration', {
+      get: function() { return duration; },
+      enumerable: true
+    });
+
+    Object.defineProperty(audioPlayer, 'volume', {
+      get: function() { return volume; },
+      enumerable: true
+    });
+
+    Object.defineProperty(audioPlayer, 'url', {
+      get: function() { return currentUrl; },
+      enumerable: true
+    });
+
+    Object.defineProperty(audioPlayer, 'isInitialized', {
+      get: function() { return isInitialized; },
+      enumerable: true
+    });
+
+    WebView.onEvent('audio_player_play', onPlayCommand);
+    WebView.onEvent('audio_player_pause', onPauseCommand);
+    WebView.onEvent('audio_player_stop', onStopCommand);
+    WebView.onEvent('audio_player_seek', onSeekCommand);
+    WebView.onEvent('audio_player_set_volume', onSetVolumeCommand);
+    WebView.onEvent('audio_player_load', onLoadCommand);
+
+    function onPlayCommand(eventType, eventData) {
+      if (audioElement) {
+        audioElement.play();
+      }
+    }
+
+    function onPauseCommand(eventType, eventData) {
+      if (audioElement) {
+        audioElement.pause();
+      }
+    }
+
+    function onStopCommand(eventType, eventData) {
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+        playerState = 'stopped';
+        currentTime = 0;
+        sendStateUpdate();
+      }
+    }
+
+    function onSeekCommand(eventType, eventData) {
+      if (audioElement && eventData && typeof eventData.time === 'number') {
+        audioElement.currentTime = eventData.time;
+      }
+    }
+
+    function onSetVolumeCommand(eventType, eventData) {
+      if (audioElement && eventData && typeof eventData.volume === 'number') {
+        var vol = Math.max(0, Math.min(1, eventData.volume));
+        audioElement.volume = vol;
+      }
+    }
+
+    function onLoadCommand(eventType, eventData) {
+      if (eventData && eventData.url) {
+        audioPlayer.load(eventData.url);
+      }
+    }
+
+    function sendStateUpdate() {
+      var state = getState();
+      var stateStr = JSON.stringify(state);
+      if (stateStr !== lastSentState) {
+        lastSentState = stateStr;
+        WebView.postEvent('audio_player_state_changed', false, state);
+      }
+    }
+
+    function sendTimeUpdate() {
+      WebView.postEvent('audio_player_timeupdate', false, {
+        currentTime: currentTime,
+        duration: duration,
+        state: playerState
+      });
+    }
+
+    function getState() {
+      return {
+        state: playerState,
+        currentTime: currentTime,
+        duration: duration,
+        volume: volume,
+        url: currentUrl,
+        error: lastError
+      };
+    }
+
+    function initAudioElement(audioEl) {
+      if (!audioEl) return;
+
+      audioElement = audioEl;
+      isInitialized = true;
+
+      audioElement.addEventListener('loadstart', function() {
+        playerState = 'loading';
+        sendStateUpdate();
+      });
+
+      audioElement.addEventListener('loadedmetadata', function() {
+        duration = audioElement.duration || 0;
+        WebView.postEvent('audio_player_loaded', false, getState());
+        sendStateUpdate();
+      });
+
+      audioElement.addEventListener('play', function() {
+        playerState = 'playing';
+        sendStateUpdate();
+      });
+
+      audioElement.addEventListener('pause', function() {
+        if (audioElement.currentTime < audioElement.duration) {
+          playerState = 'paused';
+        }
+        sendStateUpdate();
+      });
+
+      audioElement.addEventListener('ended', function() {
+        playerState = 'stopped';
+        currentTime = 0;
+        WebView.postEvent('audio_player_ended', false, getState());
+        sendStateUpdate();
+      });
+
+      audioElement.addEventListener('timeupdate', function() {
+        currentTime = audioElement.currentTime || 0;
+        duration = audioElement.duration || 0;
+        sendTimeUpdate();
+      });
+
+      audioElement.addEventListener('volumechange', function() {
+        volume = audioElement.volume;
+        WebView.postEvent('audio_player_volumechange', false, {
+          volume: volume
+        });
+        sendStateUpdate();
+      });
+
+      audioElement.addEventListener('seeking', function() {
+        WebView.postEvent('audio_player_seeking', false, {
+          time: audioElement.currentTime
+        });
+      });
+
+      audioElement.addEventListener('seeked', function() {
+        currentTime = audioElement.currentTime;
+        WebView.postEvent('audio_player_seeked', false, {
+          time: currentTime
+        });
+        sendStateUpdate();
+      });
+
+      audioElement.addEventListener('error', function() {
+        playerState = 'error';
+        lastError = audioElement.error ? audioElement.error.message : 'Unknown error';
+        WebView.postEvent('audio_player_error', false, getState());
+        sendStateUpdate();
+      });
+    }
+
+    audioPlayer.init = function(audioElementOrId) {
+      var el = typeof audioElementOrId === 'string'
+        ? document.getElementById(audioElementOrId)
+        : audioElementOrId;
+
+      if (!el || el.tagName !== 'AUDIO') {
+        console.error('[Telegram.WebApp] AudioPlayer.init requires a valid audio element');
+        throw Error('WebAppAudioPlayerInitInvalid');
+      }
+
+      initAudioElement(el);
+      return audioPlayer;
+    };
+
+    audioPlayer.load = function(url) {
+      if (!audioElement) {
+        console.error('[Telegram.WebApp] AudioPlayer not initialized');
+        throw Error('WebAppAudioPlayerNotInitialized');
+      }
+
+      currentUrl = url;
+      audioElement.src = url;
+      audioElement.load();
+      return audioPlayer;
+    };
+
+    audioPlayer.play = function() {
+      if (!audioElement) {
+        console.error('[Telegram.WebApp] AudioPlayer not initialized');
+        throw Error('WebAppAudioPlayerNotInitialized');
+      }
+
+      audioElement.play();
+      return audioPlayer;
+    };
+
+    audioPlayer.pause = function() {
+      if (!audioElement) {
+        console.error('[Telegram.WebApp] AudioPlayer not initialized');
+        throw Error('WebAppAudioPlayerNotInitialized');
+      }
+
+      audioElement.pause();
+      return audioPlayer;
+    };
+
+    audioPlayer.stop = function() {
+      if (!audioElement) {
+        console.error('[Telegram.WebApp] AudioPlayer not initialized');
+        throw Error('WebAppAudioPlayerNotInitialized');
+      }
+
+      audioElement.pause();
+      audioElement.currentTime = 0;
+      playerState = 'stopped';
+      currentTime = 0;
+      sendStateUpdate();
+      return audioPlayer;
+    };
+
+    audioPlayer.seek = function(time) {
+      if (!audioElement) {
+        console.error('[Telegram.WebApp] AudioPlayer not initialized');
+        throw Error('WebAppAudioPlayerNotInitialized');
+      }
+
+      if (typeof time !== 'number' || time < 0) {
+        console.error('[Telegram.WebApp] Seek time must be a positive number');
+        throw Error('WebAppAudioPlayerSeekInvalid');
+      }
+
+      audioElement.currentTime = time;
+      return audioPlayer;
+    };
+
+    audioPlayer.setVolume = function(vol) {
+      if (!audioElement) {
+        console.error('[Telegram.WebApp] AudioPlayer not initialized');
+        throw Error('WebAppAudioPlayerNotInitialized');
+      }
+
+      if (typeof vol !== 'number' || vol < 0 || vol > 1) {
+        console.error('[Telegram.WebApp] Volume must be between 0 and 1');
+        throw Error('WebAppAudioPlayerVolumeInvalid');
+      }
+
+      audioElement.volume = vol;
+      return audioPlayer;
+    };
+
+    audioPlayer.getState = function() {
+      return getState();
+    };
+
+    return audioPlayer;
+  })();
+
   var SettingsButton = (function() {
     var isVisible = false;
 
@@ -2720,6 +3008,10 @@
   });
   Object.defineProperty(WebApp, 'HapticFeedback', {
     value: HapticFeedback,
+    enumerable: true
+  });
+  Object.defineProperty(WebApp, 'AudioPlayer', {
+    value: AudioPlayer,
     enumerable: true
   });
   Object.defineProperty(WebApp, 'CloudStorage', {
