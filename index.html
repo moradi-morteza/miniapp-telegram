@@ -520,11 +520,13 @@
         function loadTestTrack() {
             initMusicPlayer();
 
-            const url = 'https://dls.musics-fa.com/song/alibz/2025/12/Iman%20Tahmasebi%20-%20Golomi%20Musics-Fa.mp3';
+            const url = 'https://dl6.songsara.net/FRE/15/For%20A%20Hero%20(Playlist)/02%20Another%20Dawn.mp3';
+            const title = 'Sample music';
+            const description = 'this is a description';
 
             try {
                 tg.AudioPlayer.load(url);
-                document.querySelector('.track-title').textContent = 'Iman Tahmasebi - Golomi';
+                document.querySelector('.track-title').textContent = title;
                 addLog('Track loaded: ' + url, 'success');
             } catch (error) {
                 addLog('Failed to load track: ' + error.message, 'error');
