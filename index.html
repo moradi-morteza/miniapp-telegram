@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mini App Test</title>
-    <script src="telegram-web-app.js"></script>
+    <script>
+        // Load script with current timestamp to prevent caching
+        document.write('<script src="telegram-web-app.js?v=' + Date.now() + '"><\/script>');
+    </script>
     <style>
         * {
             margin: 0;
@@ -226,6 +229,7 @@
                 <button onclick="testExpand()">Expand</button>
                 <button onclick="testClose()">Close</button>
                 <button onclick="testHaptic()">Haptic Feedback</button>
+                <button onclick="refreshPage()" style="background-color: #27ae60;">Refresh Page</button>
             </div>
         </div>
 
@@ -355,6 +359,11 @@
 
         // Initialize Telegram WebApp
         const tg = window.Telegram.WebApp;
+
+        function refreshPage() {
+            console.log('Refreshing page...');
+            location.reload(true);
+        }
 
         function testReady() {
             console.log('Calling ready()...');
