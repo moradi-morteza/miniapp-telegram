@@ -1413,7 +1413,7 @@
         audioElement.currentTime = 0;
         playerState = 'stopped';
         currentTime = 0;
-        sendStateUpdate();
+        sendStateUpdate('android_stop_command');
       }
     }
 
@@ -1436,8 +1436,8 @@
       }
     }
 
-    function sendStateUpdate() {
-      var state = getState();
+    function sendStateUpdate(source) {
+      var state = getState(source);
       var stateStr = JSON.stringify(state);
       if (stateStr !== lastSentState) {
         lastSentState = stateStr;
@@ -1453,14 +1453,15 @@
       });
     }
 
-    function getState() {
+    function getState(source) {
       return {
         state: playerState,
         currentTime: currentTime,
         duration: duration,
         volume: volume,
         url: currentUrl,
-        error: lastError
+        error: lastError,
+        source: source || 'unknown'
       };
     }
 
@@ -1472,32 +1473,32 @@
 
       audioElement.addEventListener('loadstart', function() {
         playerState = 'loading';
-        sendStateUpdate();
+        sendStateUpdate('event_loadstart');
       });
 
       audioElement.addEventListener('loadedmetadata', function() {
         duration = audioElement.duration || 0;
-        WebView.postEvent('audio_player_loaded', false, getState());
-        sendStateUpdate();
+        WebView.postEvent('audio_player_loaded', false, getState('event_loadedmetadata'));
+        sendStateUpdate('event_loadedmetadata');
       });
 
       audioElement.addEventListener('play', function() {
         playerState = 'playing';
-        sendStateUpdate();
+        sendStateUpdate('event_play');
       });
 
       audioElement.addEventListener('pause', function() {
         if (audioElement.currentTime < audioElement.duration) {
           playerState = 'paused';
         }
-        sendStateUpdate();
+        sendStateUpdate('event_pause');
       });
 
       audioElement.addEventListener('ended', function() {
         playerState = 'stopped';
         currentTime = 0;
-        WebView.postEvent('audio_player_ended', false, getState());
-        sendStateUpdate();
+        WebView.postEvent('audio_player_ended', false, getState('event_ended'));
+        sendStateUpdate('event_ended');
       });
 
       audioElement.addEventListener('timeupdate', function() {
@@ -1511,7 +1512,7 @@
         WebView.postEvent('audio_player_volumechange', false, {
           volume: volume
         });
-        sendStateUpdate();
+        sendStateUpdate('event_volumechange');
       });
 
       audioElement.addEventListener('seeking', function() {
@@ -1525,14 +1526,14 @@
         WebView.postEvent('audio_player_seeked', false, {
           time: currentTime
         });
-        sendStateUpdate();
+        sendStateUpdate('event_seeked');
       });
 
       audioElement.addEventListener('error', function() {
         playerState = 'error';
         lastError = audioElement.error ? audioElement.error.message : 'Unknown error';
-        WebView.postEvent('audio_player_error', false, getState());
-        sendStateUpdate();
+        WebView.postEvent('audio_player_error', false, getState('event_error'));
+        sendStateUpdate('event_error');
       });
     }
 
@@ -1592,7 +1593,7 @@
       audioElement.currentTime = 0;
       playerState = 'stopped';
       currentTime = 0;
-      sendStateUpdate();
+      sendStateUpdate('api_stop');
       return audioPlayer;
     };
 
@@ -1626,8 +1627,8 @@
       return audioPlayer;
     };
 
-    audioPlayer.getState = function() {
-      return getState();
+    audioPlayer.getState = function(source) {
+      return getState(source || 'api_getState');
     };
 
     return audioPlayer;
