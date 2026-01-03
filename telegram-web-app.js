@@ -745,7 +745,7 @@
           themeParams.bg_color == color) {
         color = 'bg_color';
       } else if (themeParams.secondary_bg_color &&
-                 themeParams.secondary_bg_color == color) {
+          themeParams.secondary_bg_color == color) {
         color = 'secondary_bg_color';
       }
     }
@@ -1534,6 +1534,26 @@
         lastError = audioElement.error ? audioElement.error.message : 'Unknown error';
         WebView.postEvent('audio_player_error', false, getState('event_error'));
         sendStateUpdate('event_error');
+      });
+
+      // Listen for audio control events from native (notification controls, seekbar, play/pause button)
+      WebView.onEvent('audio_control', function(eventType, eventData) {
+        console.log('[Telegram.WebApp.AudioPlayer] Received audio_control event:', eventData);
+        if (!eventData || !eventData.action) {
+          console.warn('[Telegram.WebApp.AudioPlayer] Invalid audio_control event data');
+          return;
+        }
+
+        if (eventData.action === 'play') {
+          console.log('[Telegram.WebApp.AudioPlayer] Playing from native control');
+          audioElement.play();
+        } else if (eventData.action === 'pause') {
+          console.log('[Telegram.WebApp.AudioPlayer] Pausing from native control');
+          audioElement.pause();
+        } else if (eventData.action === 'seek' && typeof eventData.time === 'number') {
+          console.log('[Telegram.WebApp.AudioPlayer] Seeking to:', eventData.time);
+          audioElement.currentTime = eventData.time;
+        }
       });
     }
 
